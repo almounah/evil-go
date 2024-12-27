@@ -43,13 +43,6 @@ echo "#### Copying to $targ"
 cp -Rp "$src" "$targ"
 cd "$targ"
 echo
-echo "#### Cleaning $targ"
-chmod -R +w .
-rm -f .gitignore
-if [ -e .git ]; then
-	git clean -f -d
-fi
-echo
 echo "#### Building $targ"
 echo
 cd src
@@ -78,8 +71,4 @@ rm -rf pkg/bootstrap pkg/obj .git
 
 echo ----
 echo Bootstrap toolchain for "$GOOS/$GOARCH" installed in "$(pwd)".
-echo Building tbz.
-cd ..
-tar cf - "go-${GOOS}-${GOARCH}-bootstrap" | bzip2 -9 >"go-${GOOS}-${GOARCH}-bootstrap.tbz"
-ls -l "$(pwd)/go-${GOOS}-${GOARCH}-bootstrap.tbz"
 exit 0

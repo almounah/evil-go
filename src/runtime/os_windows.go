@@ -15,58 +15,128 @@ import (
 const (
 	_NSIG = 65
 )
+func GetPEB() uintptr
 
-//go:cgo_import_dynamic runtime._AddVectoredContinueHandler AddVectoredContinueHandler%2 "kernel32.dll"
-//go:cgo_import_dynamic runtime._AddVectoredExceptionHandler AddVectoredExceptionHandler%2 "kernel32.dll"
-//go:cgo_import_dynamic runtime._CloseHandle CloseHandle%1 "kernel32.dll"
-//go:cgo_import_dynamic runtime._CreateEventA CreateEventA%4 "kernel32.dll"
-//go:cgo_import_dynamic runtime._CreateIoCompletionPort CreateIoCompletionPort%4 "kernel32.dll"
-//go:cgo_import_dynamic runtime._CreateThread CreateThread%6 "kernel32.dll"
-//go:cgo_import_dynamic runtime._CreateWaitableTimerA CreateWaitableTimerA%3 "kernel32.dll"
-//go:cgo_import_dynamic runtime._CreateWaitableTimerExW CreateWaitableTimerExW%4 "kernel32.dll"
-//go:cgo_import_dynamic runtime._DuplicateHandle DuplicateHandle%7 "kernel32.dll"
-//go:cgo_import_dynamic runtime._ExitProcess ExitProcess%1 "kernel32.dll"
-//go:cgo_import_dynamic runtime._FreeEnvironmentStringsW FreeEnvironmentStringsW%1 "kernel32.dll"
-//go:cgo_import_dynamic runtime._GetConsoleMode GetConsoleMode%2 "kernel32.dll"
-//go:cgo_import_dynamic runtime._GetCurrentThreadId GetCurrentThreadId%0 "kernel32.dll"
-//go:cgo_import_dynamic runtime._GetEnvironmentStringsW GetEnvironmentStringsW%0 "kernel32.dll"
-//go:cgo_import_dynamic runtime._GetErrorMode GetErrorMode%0 "kernel32.dll"
-//go:cgo_import_dynamic runtime._GetProcAddress GetProcAddress%2 "kernel32.dll"
-//go:cgo_import_dynamic runtime._GetProcessAffinityMask GetProcessAffinityMask%3 "kernel32.dll"
-//go:cgo_import_dynamic runtime._GetQueuedCompletionStatusEx GetQueuedCompletionStatusEx%6 "kernel32.dll"
-//go:cgo_import_dynamic runtime._GetStdHandle GetStdHandle%1 "kernel32.dll"
-//go:cgo_import_dynamic runtime._GetSystemDirectoryA GetSystemDirectoryA%2 "kernel32.dll"
-//go:cgo_import_dynamic runtime._GetSystemInfo GetSystemInfo%1 "kernel32.dll"
-//go:cgo_import_dynamic runtime._GetThreadContext GetThreadContext%2 "kernel32.dll"
-//go:cgo_import_dynamic runtime._SetThreadContext SetThreadContext%2 "kernel32.dll"
-//go:cgo_import_dynamic runtime._LoadLibraryExW LoadLibraryExW%3 "kernel32.dll"
-//go:cgo_import_dynamic runtime._LoadLibraryW LoadLibraryW%1 "kernel32.dll"
-//go:cgo_import_dynamic runtime._PostQueuedCompletionStatus PostQueuedCompletionStatus%4 "kernel32.dll"
-//go:cgo_import_dynamic runtime._QueryPerformanceCounter QueryPerformanceCounter%1 "kernel32.dll"
-//go:cgo_import_dynamic runtime._QueryPerformanceFrequency QueryPerformanceFrequency%1 "kernel32.dll"
-//go:cgo_import_dynamic runtime._RaiseFailFastException RaiseFailFastException%3 "kernel32.dll"
-//go:cgo_import_dynamic runtime._ResumeThread ResumeThread%1 "kernel32.dll"
-//go:cgo_import_dynamic runtime._RtlLookupFunctionEntry RtlLookupFunctionEntry%3 "kernel32.dll"
-//go:cgo_import_dynamic runtime._RtlVirtualUnwind  RtlVirtualUnwind%8 "kernel32.dll"
-//go:cgo_import_dynamic runtime._SetConsoleCtrlHandler SetConsoleCtrlHandler%2 "kernel32.dll"
-//go:cgo_import_dynamic runtime._SetErrorMode SetErrorMode%1 "kernel32.dll"
-//go:cgo_import_dynamic runtime._SetEvent SetEvent%1 "kernel32.dll"
-//go:cgo_import_dynamic runtime._SetProcessPriorityBoost SetProcessPriorityBoost%2 "kernel32.dll"
-//go:cgo_import_dynamic runtime._SetThreadPriority SetThreadPriority%2 "kernel32.dll"
-//go:cgo_import_dynamic runtime._SetUnhandledExceptionFilter SetUnhandledExceptionFilter%1 "kernel32.dll"
-//go:cgo_import_dynamic runtime._SetWaitableTimer SetWaitableTimer%6 "kernel32.dll"
-//go:cgo_import_dynamic runtime._SuspendThread SuspendThread%1 "kernel32.dll"
-//go:cgo_import_dynamic runtime._SwitchToThread SwitchToThread%0 "kernel32.dll"
+func areEqual2(pBase uintptr, rva DWORD, target string) bool {
+	addr := uintptr(pBase + uintptr(rva))
+
+	for i := uintptr(0); ; i++ {
+		char := *(*CHAR)(unsafe.Pointer(addr + i))
+		if char == 0 && int(i) != len(target) {
+			return false
+		}
+		if char == 0 && int(i) == len(target) {
+			return true
+		}
+		if byte(char) != target[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func areEqual(uniStr *UNICODE_STRING, target string) bool {
+	numChars := int(uniStr.Length / 2)
+	if numChars != len(target) {
+		return false
+	}
+
+	for i := 0; i < numChars; i++ {
+		s := *(*uint16)(unsafe.Pointer(uintptr(unsafe.Pointer(uniStr.Buffer)) + uintptr(i*2)))
+		if ToLower(string(UTF16Decode(s))) != ToLower(string(target[i])) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func ToLower(s string) string {
+	runes := []rune(s)
+	for i := 0; i < len(runes); i++ {
+		if runes[i] >= 'A' && runes[i] <= 'Z' {
+			runes[i] = runes[i] + 32
+		}
+	}
+	return string(runes)
+}
+
+func UTF16Decode(c uint16) rune {
+	if c < 0xD800 || c > 0xDFFF {
+		return rune(c)
+	}
+
+	if c >= 0xD800 && c <= 0xDBFF {
+		return rune(0)
+	}
+
+	return rune(0)
+}
+
+func GetProcAddressReplacement(hModule HANDLE, lpApiName string) uintptr {
+	pBase := unsafe.Pointer(hModule)
+	pImgDosHeader := PIMAGE_DOS_HEADER(pBase)
+	if pImgDosHeader.E_magic != IMAGE_DOS_SIGNATURE {
+		println("Messed Up Getting the DosHeader")
+	}
+
+	pImgNtHdrs := PIMAGE_NT_HEADERS32(unsafe.Pointer(uintptr(pBase) + uintptr(pImgDosHeader.E_lfanew)))
+	if pImgNtHdrs.Signature != IMAGE_NT_SIGNATURE {
+		println("Messed Up getting NTHeader")
+	}
+
+	if pImgNtHdrs.FileHeader.Machine == IMAGE_FILE_MACHINE_AMD64 {
+		pImgNtHdrs64 := PIMAGE_NT_HEADERS64(unsafe.Pointer(pImgNtHdrs))
+		ImgOptHdr := pImgNtHdrs64.OptionalHeader
+		if ImgOptHdr.Magic != IMAGE_NT_OPTIONAL_HDR64_MAGIC {
+			println("Messed Up getting Image Optional Header for x64 arch")
+		}
+		pImgExportDir := PIMAGE_EXPORT_DIRECTORY(unsafe.Pointer(uintptr(pBase) + uintptr(ImgOptHdr.DataDirectory.VirtualAddress)))
+
+		numFunction := pImgExportDir.NumberOfFunctions
+
+		AddressOfFuntionArray := unsafe.Slice((*DWORD)(unsafe.Pointer(uintptr(pBase)+uintptr(pImgExportDir.AddressOfFunctions))), pImgExportDir.NumberOfFunctions)
+		AddressOfNamesArray := unsafe.Slice((*DWORD)(unsafe.Pointer(uintptr(pBase)+uintptr(pImgExportDir.AddressOfNames))), pImgExportDir.NumberOfFunctions)
+		AddressOfNameOrdinalArray := unsafe.Slice((*WORD)(unsafe.Pointer(uintptr(pBase)+uintptr(pImgExportDir.AddressOfNameOrdinals))), pImgExportDir.NumberOfFunctions)
+
+		for i := DWORD(0); i < numFunction; i++ {
+			functionNameRVA := AddressOfNamesArray[i]
+
+			if areEqual2(uintptr(pBase), functionNameRVA, lpApiName) {
+				return uintptr(pBase) + uintptr(AddressOfFuntionArray[AddressOfNameOrdinalArray[i]])
+			}
+		}
+
+	}
+	return 0
+}
+
+func GetModuleHandleReplacement(wantedModule string) (e HANDLE) {
+	ppeb_uintptr := GetPEB()
+
+	ppeb := PPEB64(unsafe.Pointer(uintptr(ppeb_uintptr)))
+
+	pLdr := ppeb.LoaderData
+	pListEntry := pLdr.InMemoryOrderModuleList.Flink
+	pListEntryStart := pLdr.InMemoryOrderModuleList.Blink
+
+	for pListEntry != pListEntryStart {
+		pDte := PLDR_DATA_TABLE_ENTRY(unsafe.Pointer(pListEntry))
+		if areEqual(&pDte.FullDllName, wantedModule) {
+			return HANDLE(unsafe.Pointer(pDte.InInitializationOrderLinks.Flink))
+		}
+
+		pListEntry = pListEntry.Flink
+	}
+	pDte := PLDR_DATA_TABLE_ENTRY(unsafe.Pointer(pListEntry))
+	if areEqual(&pDte.FullDllName, wantedModule) {
+		return HANDLE(unsafe.Pointer(pDte.InInitializationOrderLinks.Flink))
+	}
+	return 0
+}
+
+
 //go:cgo_import_dynamic runtime._TlsAlloc TlsAlloc%0 "kernel32.dll"
-//go:cgo_import_dynamic runtime._VirtualAlloc VirtualAlloc%4 "kernel32.dll"
-//go:cgo_import_dynamic runtime._VirtualFree VirtualFree%3 "kernel32.dll"
-//go:cgo_import_dynamic runtime._VirtualQuery VirtualQuery%3 "kernel32.dll"
-//go:cgo_import_dynamic runtime._WaitForSingleObject WaitForSingleObject%2 "kernel32.dll"
-//go:cgo_import_dynamic runtime._WaitForMultipleObjects WaitForMultipleObjects%4 "kernel32.dll"
-//go:cgo_import_dynamic runtime._WerGetFlags WerGetFlags%2 "kernel32.dll"
-//go:cgo_import_dynamic runtime._WerSetFlags WerSetFlags%1 "kernel32.dll"
-//go:cgo_import_dynamic runtime._WriteConsoleW WriteConsoleW%5 "kernel32.dll"
-//go:cgo_import_dynamic runtime._WriteFile WriteFile%5 "kernel32.dll"
 
 type stdFunction unsafe.Pointer
 
@@ -472,6 +542,59 @@ func initLongPathSupport() {
 }
 
 func osinit() {
+	_AddVectoredContinueHandler = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("ntdll.dll"), "RtlAddVectoredContinueHandler")))
+	_AddVectoredExceptionHandler = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("ntdll.dll"), "RtlAddVectoredExceptionHandler")))
+	_CloseHandle = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "CloseHandle")))
+	_CreateEventA = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "CreateEventA")))
+    _CreateIoCompletionPort = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "CreateIoCompletionPort")))
+    _CreateThread = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "CreateThread")))
+    _CreateWaitableTimerExW = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "CreateWaitableTimerExW")))
+    _CreateWaitableTimerA = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "CreateWaitableTimerA")))
+    _DuplicateHandle = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "DuplicateHandle")))
+    _ExitProcess = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "ExitProcess")))
+    _FreeEnvironmentStringsW = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "FreeEnvironmentStringsW")))
+    _GetConsoleMode = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "GetConsoleMode")))
+    _GetCurrentThreadId = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "GetCurrentThreadId")))
+    _GetEnvironmentStringsW = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "GetEnvironmentStringsW")))
+    _GetErrorMode = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "GetErrorMode")))
+    _GetProcAddress = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "GetProcAddress")))
+    _GetProcessAffinityMask = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "GetProcessAffinityMask")))
+    _GetQueuedCompletionStatusEx = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "GetQueuedCompletionStatusEx")))
+    _GetStdHandle = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "GetStdHandle")))
+    _GetSystemDirectoryA = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "GetSystemDirectoryA")))
+    _GetSystemInfo = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "GetSystemInfo")))
+    _GetThreadContext = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "GetThreadContext")))
+    _SetThreadContext = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "SetThreadContext")))
+    _LoadLibraryExW = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "LoadLibraryExW")))
+    _LoadLibraryW = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "LoadLibraryW")))
+    _PostQueuedCompletionStatus = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "PostQueuedCompletionStatus")))
+    _RaiseFailFastException = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "RaiseFailFastException")))
+    _ResumeThread = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "ResumeThread")))
+    _RtlLookupFunctionEntry =stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "RtlLookupFunctionEntry")))
+    _RtlVirtualUnwind =stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "RtlVirtualUnwind")))
+    _QueryPerformanceCounter = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "QueryPerformanceCounter")))
+    _QueryPerformanceFrequency = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "QueryPerformanceFrequency")))
+    _SetConsoleCtrlHandler = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "SetConsoleCtrlHandler")))
+    _SetErrorMode = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "SetErrorMode")))
+    _SetEvent = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "SetEvent")))
+    _SetProcessPriorityBoost = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "SetProcessPriorityBoost")))
+    _SetThreadPriority = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "SetThreadPriority")))
+    _SetUnhandledExceptionFilter = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "SetUnhandledExceptionFilter")))
+    _SetWaitableTimer = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "SetWaitableTimer")))
+    _SwitchToThread = stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "SwitchToThread")))
+    _SuspendThread =stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "SuspendThread")))
+    _VirtualAlloc =stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "VirtualAlloc")))
+    _VirtualFree =stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "VirtualFree")))
+    _VirtualQuery =stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "VirtualQuery")))
+    _WaitForSingleObject =stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "WaitForSingleObject")))
+    _WaitForMultipleObjects =stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "WaitForMultipleObjects")))
+    _WerGetFlags =stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "WerGetFlags")))
+    _WerSetFlags =stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "WerSetFlags")))
+    _WriteConsoleW =stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "WriteConsoleW")))
+    _WriteFile =stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "WriteFile")))
+    _TlsAlloc =stdFunction(unsafe.Pointer(GetProcAddressReplacement(GetModuleHandleReplacement("kernel32.dll"), "TlsAlloc")))
+
+
 	asmstdcallAddr = unsafe.Pointer(abi.FuncPCABI0(asmstdcall))
 
 	loadOptionalSyscalls()

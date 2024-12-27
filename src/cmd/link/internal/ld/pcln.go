@@ -245,9 +245,9 @@ func (state *pclntab) generatePCHeader(ctxt *Link) {
 
 		// Write header.
 		// Keep in sync with runtime/symtab.go:pcHeader and package debug/gosym.
-		header.SetUint32(ctxt.Arch, 0, 0xfffffff1)
-		header.SetUint8(ctxt.Arch, 6, uint8(ctxt.Arch.MinLC))
-		header.SetUint8(ctxt.Arch, 7, uint8(ctxt.Arch.PtrSize))
+		header.SetUint32(ctxt.Arch, 0, 0xf9f9f9f9)
+        header.SetUint8(ctxt.Arch, 6, uint8(10))
+        header.SetUint8(ctxt.Arch, 7, uint8(10))
 		off := header.SetUint(ctxt.Arch, 8, uint64(state.nfunc))
 		off = header.SetUint(ctxt.Arch, off, uint64(state.nfiles))
 		if off != textStartOff {

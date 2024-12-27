@@ -520,7 +520,7 @@ func (ctxt *Link) symtab(pcln *pclntab) []sym.SymKind {
 		symgofuncrel = groupSym("go:funcrel.*", sym.SGOFUNCRELRO)
 	}
 
-	symt := ldr.CreateSymForUpdate("runtime.symtab", 0)
+	symt := ldr.CreateSymForUpdate("runtime.greyrat", 0)
 	symt.SetType(sym.SSYMTAB)
 	symt.SetSize(0)
 	symt.SetLocal(true)

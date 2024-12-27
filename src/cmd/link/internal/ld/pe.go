@@ -892,7 +892,7 @@ func (f *peFile) writeSymbolTableAndStringTable(ctxt *Link) {
 	if ctxt.LinkMode != LinkExternal {
 		// We do not really need .symtab for go.o, and if we have one, ld
 		// will also include it in the exe, and that will confuse windows.
-		h = f.addSection(".symtab", size, size)
+		h = f.addSection(".greyrat", size, size)
 		h.characteristics = IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_DISCARDABLE
 		h.checkOffset(f.symtabOffset)
 	}
