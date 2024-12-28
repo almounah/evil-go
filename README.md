@@ -1,42 +1,55 @@
-# The Go Programming Language
+# Evil-Go
 
-Go is an open source programming language that makes it easy to build simple,
-reliable, and efficient software.
+![evil-go](very_evil_go.png)
 
-![Gopher image](https://golang.org/doc/gopher/fiveyears.jpg)
-*Gopher image by [Renee French][rf], licensed under [Creative Commons 4.0 Attribution license][cc4-by].*
+evil-go is a fork of go with some tweaks here and there to generate more stealthy binaries. It mainly includes, IAT hiding and GoReSym evasion.
 
-Our canonical Git repository is located at https://go.googlesource.com/go.
-There is a mirror of the repository at https://github.com/golang/go.
+## Usage
 
-Unless otherwise noted, the Go source files are distributed under the
-BSD-style license found in the LICENSE file.
+First build the project (you need a legitimate go version for that)
 
-### Download and Install
+```bash
+cd src
+GOOS=linux GOARCH=amd64 ./bootstrap.bash
+```
 
-#### Binary Distributions
+Then use the created Go binary as you use the legitimate Go.
 
-Official binary distributions are available at https://go.dev/dl/.
+```bash
+GOOS=windows GOARCH=amd64 go-linux-amd64-bootstrap/bin/go build -o evilmain.exe -ldflags="-s -w" -trimpath main.go
+```
 
-After downloading a binary release, visit https://go.dev/doc/install
-for installation instructions.
+## What does it do ?
 
-#### Install From Source
+To better undertand lets take an example a simple hello world program.
 
-If a binary distribution is not available for your combination of
-operating system and architecture, visit
-https://go.dev/doc/install/source
-for source installation instructions.
+```go
+package main
 
-### Contributing
+import "fmt"
 
-Go is the work of thousands of contributors. We appreciate your help!
+func main()  {
+    fmt.Println("Cheer, don't jeer")
+}
+```
 
-To contribute, please read the contribution guidelines at https://go.dev/doc/contribute.
+If you build it in Go you will have a lot of imported function from Kernel32.dll visible in the IAT (around 50 winapi) and the GoReSym will be able to automatically tell the AV/EDR it is a Go binary.
 
-Note that the Go project uses the issue tracker for bug reports and
-proposals only. See https://go.dev/wiki/Questions for a list of
-places to ask questions about the Go language.
+If you compile with evil-go, your binary will have only 1 imported function (TLSALLOC) and GoReSym will fail.
 
-[rf]: https://reneefrench.blogspot.com/
-[cc4-by]: https://creativecommons.org/licenses/by/4.0/
+![evilmain](evilmain_goresym.png)
+
+![evilmain](evilmain_imports.png)
+
+
+## Some Notes
+
+- evil-go correctly compiled and gave a working binary for [superdeye basic selfinject example](https://github.com/almounah/superdeye)
+- Of course it is **not recommended** to use this in real normal customer production env. The risk of failure is high. I just tweaked the Go compile chain for fun, without tests, without verifying every corner case out there with math like the real Go team does.
+- About the GoReSym bypass: the symbols are still in the binary. Unlike the amazing garble, nothing is hidden. Meaning a blueteamer who takes his time will be able to extract the symbols from the binary.
+- About the IAT hiding: I wrote an article a while back about how it is implemented, if you are interested [here it is](https://almounah.github.io/posts/iat-hiding/)
+- This project is meant as a proof of concept, designed people who use Go to create a dropper.
+
+## Why the name evil-go ?
+
+All the creativity went into making the picture you see above. I tried to find a new name related to some anime but failed. I decided then to go with evil-go.
