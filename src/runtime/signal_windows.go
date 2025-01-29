@@ -128,6 +128,19 @@ func sigFetchG() *g {
 	return getg()
 }
 
+// To Make Go Runtime not handle a set of predefined exception
+// Used for Hardware Breadpoint
+
+func isHandledByMe(info *exceptionrecord) bool {
+	switch info.exceptioncode {
+	default:
+		return false
+    case _EXCEPTION_SINGLE_STEP:
+        return true
+	}
+
+}
+
 // sigtrampgo is called from the exception handler function, sigtramp,
 // written in assembly code.
 // Return EXCEPTION_CONTINUE_EXECUTION if the exception is handled,
@@ -137,6 +150,11 @@ func sigFetchG() *g {
 //
 //go:nosplit
 func sigtrampgo(ep *exceptionpointers, kind int) int32 {
+    // If Is handled by Me, don't run Go specific Handler
+    // Search Elsewhere for exception
+    if isHandledByMe(ep.record) {
+		return _EXCEPTION_CONTINUE_SEARCH
+    }
 	gp := sigFetchG()
 	if gp == nil {
 		return _EXCEPTION_CONTINUE_SEARCH
